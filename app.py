@@ -30,14 +30,21 @@ def download():
 
     try:
         # Download audio using yt-dlp
-        subprocess.run([
+        result = subprocess.run([
             'yt-dlp',
             '-x',
             '--audio-format', 'mp3',
             '--audio-quality', '0',
             '-o', output_path,
             url
-        ], check=True)
+        ], capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            return jsonify({
+                'error': 'Download failed',
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            }), 500
 
         # Tag the MP3
         audio = MP3(output_path, ID3=ID3)
