@@ -29,21 +29,21 @@ def download():
     output_path = os.path.join(tmp_dir, 'audio.mp3')
 
     try:
-        # Download audio using yt-dlp
         result = subprocess.run([
             'yt-dlp',
+            '--verbose',
             '-x',
             '--audio-format', 'mp3',
             '--audio-quality', '0',
             '-o', output_path,
             url
-        ], capture_output=True, text=True)
-        
+        ], capture_output=True, text=True, timeout=120)
+
         if result.returncode != 0:
             return jsonify({
                 'error': 'Download failed',
-                'stdout': result.stdout,
-                'stderr': result.stderr
+                'stdout': result.stdout[-3000:],
+                'stderr': result.stderr[-3000:]
             }), 500
 
         # Tag the MP3
@@ -62,7 +62,6 @@ def download():
         if genre:
             audio.tags.add(TCON(encoding=3, text=genre))
 
-        # Add cover art if image URL provided
         if image_url:
             try:
                 img_data = requests.get(image_url, timeout=10).content
@@ -78,7 +77,6 @@ def download():
 
         audio.save()
 
-        # Return the file
         filename = f"{artist} - {title}.mp3" if artist and title else "audio.mp3"
         return send_file(
             output_path,
@@ -87,6 +85,8 @@ def download():
             mimetype='audio/mpeg'
         )
 
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Download timed out after 120 seconds'}), 500
     except subprocess.CalledProcessError as e:
         return jsonify({'error': f'Download failed: {str(e)}'}), 500
     except Exception as e:
