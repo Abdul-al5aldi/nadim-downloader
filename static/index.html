@@ -1,1 +1,584 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nadim Editor</title>
+<style>
+  :root {
+    --bg: #1a1512;
+    --panel: #262019;
+    --panel2: #322a21;
+    --accent: #b5773a;
+    --accent2: #d99a55;
+    --text: #ece4d9;
+    --muted: #9c8f7f;
+    --danger: #c0554d;
+    --ok: #6d9e6f;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  .hidden { display: none !important; }
 
+  /* ---- Login ---- */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; flex-direction: column; gap: 16px; padding: 20px;
+  }
+  #login-screen h1 { color: var(--accent2); font-size: 28px; }
+  #login-screen input {
+    padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--panel2);
+    background: var(--panel); color: var(--text); font-size: 16px; width: 260px;
+    text-align: center;
+  }
+  #login-screen button {
+    padding: 12px 32px; border-radius: var(--radius); border: none;
+    background: var(--accent); color: #fff; font-size: 16px; cursor: pointer;
+  }
+  #login-error { color: var(--danger); font-size: 14px; min-height: 18px; }
+
+  /* ---- Header ---- */
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; background: var(--panel);
+    position: sticky; top: 0; z-index: 20;
+  }
+  header h1 { font-size: 18px; color: var(--accent2); flex-shrink: 0; }
+  #search {
+    flex: 1; min-width: 0; padding: 9px 14px; border-radius: 20px;
+    border: 1px solid var(--panel2); background: var(--bg); color: var(--text);
+    font-size: 14px;
+  }
+  header button {
+    background: var(--panel2); border: none; color: var(--text);
+    padding: 9px 12px; border-radius: 10px; cursor: pointer; font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* ---- Breadcrumb + toolbar ---- */
+  #toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+    flex-wrap: wrap;
+  }
+  #breadcrumb { flex: 1; font-size: 14px; color: var(--muted); word-break: break-all; }
+  #breadcrumb span { cursor: pointer; color: var(--accent2); }
+  #toolbar button {
+    background: var(--panel2); border: none; color: var(--text);
+    padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 13px;
+  }
+
+  /* ---- File list ---- */
+  #file-list { padding: 0 12px 90px; }
+  .file-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 10px; border-bottom: 1px solid var(--panel2);
+    cursor: pointer; border-radius: 8px;
+  }
+  .file-row:active { background: var(--panel); }
+  .file-icon { font-size: 22px; width: 30px; text-align: center; flex-shrink: 0; }
+  .file-name { flex: 1; font-size: 15px; word-break: break-all; }
+  .file-size { color: var(--muted); font-size: 12px; flex-shrink: 0; }
+  .file-menu-btn {
+    background: none; border: none; color: var(--muted); font-size: 20px;
+    padding: 4px 10px; cursor: pointer; flex-shrink: 0;
+  }
+
+  /* ---- Editor panel ---- */
+  #editor {
+    position: fixed; inset: 0; background: var(--bg); z-index: 50;
+    overflow-y: auto; padding-bottom: 40px;
+  }
+  #editor header { position: sticky; top: 0; }
+  #editor-body { padding: 16px; max-width: 640px; margin: 0 auto; }
+  .cover-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    margin-bottom: 20px;
+  }
+  #cover-img {
+    width: 180px; height: 180px; border-radius: var(--radius);
+    object-fit: cover; background: var(--panel2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cover-actions { display: flex; gap: 8px; }
+  .cover-actions button, .cover-actions label {
+    background: var(--panel2); border: none; color: var(--text);
+    padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: 13px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 11px 14px; border-radius: 10px;
+    border: 1px solid var(--panel2); background: var(--panel);
+    color: var(--text); font-size: 15px;
+  }
+  .field textarea { min-height: 120px; resize: vertical; font-family: inherit; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  #save-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius); border: none;
+    background: var(--accent); color: #fff; font-size: 16px; cursor: pointer;
+    margin-top: 8px;
+  }
+  #save-status { text-align: center; margin-top: 10px; min-height: 20px; font-size: 14px; }
+
+  /* ---- Player ---- */
+  #player-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--panel); padding: 8px 16px;
+    display: flex; align-items: center; gap: 12px; z-index: 40;
+    border-top: 1px solid var(--panel2);
+  }
+  #player-title { font-size: 13px; flex-shrink: 0; max-width: 30%; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  #player-bar audio { flex: 1; height: 36px; }
+
+  /* ---- Modal ---- */
+  #modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  #modal-box {
+    background: var(--panel); border-radius: var(--radius); padding: 20px;
+    width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 12px;
+  }
+  #modal-box h3 { font-size: 16px; }
+  #modal-box input {
+    padding: 11px 14px; border-radius: 10px; border: 1px solid var(--panel2);
+    background: var(--bg); color: var(--text); font-size: 15px;
+  }
+  #modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  #modal-actions button {
+    padding: 9px 18px; border-radius: 10px; border: none; cursor: pointer; font-size: 14px;
+  }
+  #modal-ok { background: var(--accent); color: #fff; }
+  #modal-cancel { background: var(--panel2); color: var(--text); }
+  .menu-list { display: flex; flex-direction: column; gap: 4px; }
+  .menu-list button {
+    text-align: left; padding: 12px; background: none; border: none;
+    color: var(--text); font-size: 15px; cursor: pointer; border-radius: 8px;
+  }
+  .menu-list button:active { background: var(--panel2); }
+  .menu-list button.danger { color: var(--danger); }
+  #toast {
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); color: var(--text); padding: 10px 22px;
+    border-radius: 20px; font-size: 14px; z-index: 200; transition: opacity .3s;
+    opacity: 0; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+  .spinner {
+    border: 3px solid var(--panel2); border-top-color: var(--accent);
+    border-radius: 50%; width: 28px; height: 28px;
+    animation: spin .8s linear infinite; margin: 30px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <h1>🎵 Nadim Editor</h1>
+  <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+  <button onclick="doLogin()">Enter</button>
+  <div id="login-error"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main-screen" class="hidden">
+  <header>
+    <h1>🎵 Nadim</h1>
+    <input id="search" placeholder="Search..." oninput="renderList()">
+    <button onclick="logout()">⎋</button>
+  </header>
+
+  <div id="toolbar">
+    <div id="breadcrumb"></div>
+    <button onclick="promptNewFolder()">📁+ Folder</button>
+    <label style="background:var(--panel2);padding:8px 12px;border-radius:10px;cursor:pointer;font-size:13px;">
+      ⬆️ Upload
+      <input type="file" id="upload-input" multiple style="display:none" onchange="uploadFiles(this.files)">
+    </label>
+  </div>
+
+  <div id="file-list"></div>
+</div>
+
+<!-- EDITOR -->
+<div id="editor" class="hidden">
+  <header>
+    <button onclick="closeEditor()" style="background:var(--panel2);border:none;color:var(--text);padding:9px 14px;border-radius:10px;cursor:pointer;">← Back</button>
+    <h1 id="editor-filename" style="flex:1;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></h1>
+    <button onclick="playCurrent()" style="background:var(--panel2);border:none;color:var(--text);padding:9px 14px;border-radius:10px;cursor:pointer;">▶</button>
+  </header>
+  <div id="editor-body">
+    <div class="cover-wrap">
+      <img id="cover-img" alt="No cover">
+      <div class="cover-actions">
+        <label>
+          🖼 Change
+          <input type="file" id="cover-input" accept="image/*" style="display:none" onchange="uploadCover(this.files[0])">
+        </label>
+        <button onclick="removeCover()">🗑 Remove</button>
+      </div>
+    </div>
+
+    <div class="field"><label>Title</label><input id="f-title"></div>
+    <div class="field"><label>Artist</label><input id="f-artist"></div>
+    <div class="field"><label>Album Artist</label><input id="f-album_artist"></div>
+    <div class="field"><label>Album</label><input id="f-album"></div>
+    <div class="row2">
+      <div class="field"><label>Year</label><input id="f-year" inputmode="numeric"></div>
+      <div class="field"><label>Track #</label><input id="f-track" inputmode="numeric"></div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Genre</label><input id="f-genre"></div>
+      <div class="field"><label>Language</label>
+        <select id="f-language">
+          <option value="">—</option>
+          <option value="ara">Arabic (ara)</option>
+          <option value="eng">English (eng)</option>
+          <option value="fra">French (fra)</option>
+          <option value="spa">Spanish (spa)</option>
+          <option value="tur">Turkish (tur)</option>
+          <option value="urd">Urdu (urd)</option>
+          <option value="fas">Persian (fas)</option>
+          <option value="hin">Hindi (hin)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Composer</label><input id="f-composer"></div>
+    <div class="field"><label>Comment</label><input id="f-comment"></div>
+    <div class="field"><label>Lyrics</label><textarea id="f-lyrics" dir="auto"></textarea></div>
+
+    <button id="save-btn" onclick="saveTags()">💾 Save</button>
+    <div id="save-status"></div>
+  </div>
+</div>
+
+<!-- PLAYER -->
+<div id="player-bar" class="hidden">
+  <div id="player-title"></div>
+  <audio id="player" controls></audio>
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="hidden">
+  <div id="modal-box"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const api = (path, opts={}) => fetch('/api' + path, {credentials:'same-origin', ...opts})
+  .then(async r => {
+    if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+    return r;
+  });
+
+let currentPath = '';
+let entries = [];
+let editingFile = null; // relative path of file being edited
+let removeCoverFlag = false;
+
+// ---------- Auth ----------
+function showLogin() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('main-screen').classList.add('hidden');
+  document.getElementById('editor').classList.add('hidden');
+}
+function showMain() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.remove('hidden');
+}
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value;
+  const r = await fetch('/api/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    credentials:'same-origin',
+    body: JSON.stringify({password: pass})
+  });
+  if (r.ok) { showMain(); loadDir(''); }
+  else document.getElementById('login-error').textContent = 'Wrong password';
+}
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+async function logout() {
+  await api('/logout', {method:'POST'});
+  showLogin();
+}
+
+// ---------- File list ----------
+async function loadDir(path) {
+  currentPath = path;
+  document.getElementById('file-list').innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await api('/list?path=' + encodeURIComponent(path));
+    const data = await r.json();
+    entries = data.entries;
+    renderBreadcrumb();
+    renderList();
+  } catch(e) {
+    document.getElementById('file-list').innerHTML =
+      '<p style="text-align:center;color:var(--danger);padding:30px;">Failed to load</p>';
+  }
+}
+
+function renderBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  const parts = currentPath ? currentPath.split('/') : [];
+  let html = '<span onclick="loadDir(\'\')">🏠 music</span>';
+  let acc = '';
+  for (const p of parts) {
+    acc = acc ? acc + '/' + p : p;
+    html += ' / <span onclick="loadDir(\'' + acc.replace(/'/g,"\\'") + '\')">' + p + '</span>';
+  }
+  bc.innerHTML = html;
+}
+
+function fmtSize(b) {
+  if (b > 1048576) return (b/1048576).toFixed(1) + ' MB';
+  if (b > 1024) return (b/1024).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+function renderList() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const list = document.getElementById('file-list');
+  list.innerHTML = '';
+  const filtered = entries.filter(e => e.name.toLowerCase().includes(q));
+  if (!filtered.length) {
+    list.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px;">Empty</p>';
+    return;
+  }
+  for (const e of filtered) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    const icon = e.is_dir ? '📁' : (e.is_audio ? '🎵' : (e.is_lyric ? '📝' : '📄'));
+    row.innerHTML = `
+      <div class="file-icon">${icon}</div>
+      <div class="file-name" dir="auto">${e.name}</div>
+      <div class="file-size">${e.is_dir ? '' : fmtSize(e.size)}</div>
+      <button class="file-menu-btn" onclick="event.stopPropagation();openMenu('${e.name.replace(/'/g,"\\'")}', ${e.is_dir})">⋮</button>
+    `;
+    row.onclick = () => {
+      const rel = currentPath ? currentPath + '/' + e.name : e.name;
+      if (e.is_dir) loadDir(rel);
+      else if (e.is_audio) openEditor(rel, e.name);
+    };
+    list.appendChild(row);
+  }
+}
+
+// ---------- Context menu ----------
+function openMenu(name, isDir) {
+  const rel = currentPath ? currentPath + '/' + name : name;
+  showModal(`
+    <h3 dir="auto">${name}</h3>
+    <div class="menu-list">
+      ${!isDir && name.toLowerCase().endsWith('.mp3') ?
+        `<button onclick="closeModal();playFile('${rel.replace(/'/g,"\\'")}','${name.replace(/'/g,"\\'")}')">▶ Play</button>` : ''}
+      <button onclick="closeModal();promptRename('${rel.replace(/'/g,"\\'")}','${name.replace(/'/g,"\\'")}')">✏️ Rename / Move</button>
+      <button class="danger" onclick="closeModal();confirmDelete('${rel.replace(/'/g,"\\'")}','${name.replace(/'/g,"\\'")}')">🗑 Delete</button>
+    </div>
+    <div id="modal-actions"><button id="modal-cancel" onclick="closeModal()">Close</button></div>
+  `);
+}
+
+// ---------- Modal helpers ----------
+function showModal(html) {
+  document.getElementById('modal-box').innerHTML = html;
+  document.getElementById('modal').classList.remove('hidden');
+}
+function closeModal() {
+  document.getElementById('modal').classList.add('hidden');
+}
+
+function promptNewFolder() {
+  showModal(`
+    <h3>New folder</h3>
+    <input id="modal-input" placeholder="Folder name">
+    <div id="modal-actions">
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button id="modal-ok" onclick="createFolder()">Create</button>
+    </div>
+  `);
+}
+async function createFolder() {
+  const name = document.getElementById('modal-input').value.trim();
+  if (!name) return;
+  const rel = currentPath ? currentPath + '/' + name : name;
+  await api('/mkdir', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path: rel})});
+  closeModal(); toast('Folder created'); loadDir(currentPath);
+}
+
+function promptRename(rel, name) {
+  showModal(`
+    <h3>Rename / Move</h3>
+    <p style="font-size:12px;color:var(--muted)">Path relative to music root. Use / to move into folders.</p>
+    <input id="modal-input" value="${rel.replace(/"/g,'&quot;')}" dir="auto">
+    <div id="modal-actions">
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button id="modal-ok" onclick="doRename('${rel.replace(/'/g,"\\'")}')">Save</button>
+    </div>
+  `);
+}
+async function doRename(src) {
+  const dst = document.getElementById('modal-input').value.trim();
+  if (!dst || dst === src) { closeModal(); return; }
+  await api('/rename', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({src, dst})});
+  closeModal(); toast('Renamed'); loadDir(currentPath);
+}
+
+function confirmDelete(rel, name) {
+  showModal(`
+    <h3>Delete?</h3>
+    <p dir="auto" style="font-size:14px;">${name}</p>
+    <div id="modal-actions">
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button id="modal-ok" style="background:var(--danger)" onclick="doDelete('${rel.replace(/'/g,"\\'")}')">Delete</button>
+    </div>
+  `);
+}
+async function doDelete(rel) {
+  const r = await api('/delete', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({path: rel})});
+  closeModal();
+  if (r.ok) { toast('Deleted'); loadDir(currentPath); }
+  else toast('Delete failed (folder must be empty)');
+}
+
+// ---------- Upload ----------
+async function uploadFiles(files) {
+  for (const f of files) {
+    toast('Uploading ' + f.name + '...');
+    const fd = new FormData();
+    fd.append('path', currentPath);
+    fd.append('file', f);
+    await api('/upload', {method:'POST', body: fd});
+  }
+  toast('Upload complete');
+  document.getElementById('upload-input').value = '';
+  loadDir(currentPath);
+}
+
+// ---------- Editor ----------
+async function openEditor(rel, name) {
+  editingFile = rel;
+  removeCoverFlag = false;
+  document.getElementById('editor-filename').textContent = name;
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('save-status').textContent = '';
+  // reset fields
+  for (const id of ['title','artist','album_artist','album','year','track','genre','composer','comment','lyrics'])
+    document.getElementById('f-'+id).value = '';
+  document.getElementById('f-language').value = '';
+  document.getElementById('cover-img').src = '';
+
+  const r = await api('/tags?path=' + encodeURIComponent(rel));
+  const t = await r.json();
+  document.getElementById('f-title').value = t.title || '';
+  document.getElementById('f-artist').value = t.artist || '';
+  document.getElementById('f-album_artist').value = t.album_artist || '';
+  document.getElementById('f-album').value = t.album || '';
+  document.getElementById('f-year').value = t.year || '';
+  document.getElementById('f-track').value = t.track || '';
+  document.getElementById('f-genre').value = t.genre || '';
+  document.getElementById('f-language').value = t.language || '';
+  document.getElementById('f-composer').value = t.composer || '';
+  document.getElementById('f-comment').value = t.comment || '';
+  document.getElementById('f-lyrics').value = t.lyrics || '';
+  if (t.has_cover)
+    document.getElementById('cover-img').src = '/api/cover?path=' + encodeURIComponent(rel) + '&t=' + Date.now();
+}
+
+function closeEditor() {
+  document.getElementById('editor').classList.add('hidden');
+  editingFile = null;
+}
+
+async function saveTags() {
+  if (!editingFile) return;
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  const body = {
+    path: editingFile,
+    title: document.getElementById('f-title').value,
+    artist: document.getElementById('f-artist').value,
+    album_artist: document.getElementById('f-album_artist').value,
+    album: document.getElementById('f-album').value,
+    year: document.getElementById('f-year').value,
+    track: document.getElementById('f-track').value,
+    genre: document.getElementById('f-genre').value,
+    language: document.getElementById('f-language').value,
+    composer: document.getElementById('f-composer').value,
+    comment: document.getElementById('f-comment').value,
+    lyrics: document.getElementById('f-lyrics').value,
+    remove_cover: removeCoverFlag,
+  };
+  const r = await api('/tags', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)});
+  btn.disabled = false; btn.textContent = '💾 Save';
+  const st = document.getElementById('save-status');
+  if (r.ok) { st.textContent = '✅ Saved'; st.style.color = 'var(--ok)'; removeCoverFlag = false; }
+  else { st.textContent = '❌ Failed'; st.style.color = 'var(--danger)'; }
+}
+
+async function uploadCover(file) {
+  if (!file || !editingFile) return;
+  const fd = new FormData();
+  fd.append('path', editingFile);
+  fd.append('image', file);
+  toast('Uploading cover...');
+  const r = await api('/cover', {method:'POST', body: fd});
+  if (r.ok) {
+    toast('Cover updated');
+    document.getElementById('cover-img').src = '/api/cover?path=' + encodeURIComponent(editingFile) + '&t=' + Date.now();
+    removeCoverFlag = false;
+  } else toast('Failed');
+  document.getElementById('cover-input').value = '';
+}
+
+function removeCover() {
+  removeCoverFlag = true;
+  document.getElementById('cover-img').src = '';
+  toast('Cover will be removed on Save');
+}
+
+// ---------- Player ----------
+function playCurrent() { if (editingFile) playFile(editingFile, editingFile.split('/').pop()); }
+function playFile(rel, name) {
+  const bar = document.getElementById('player-bar');
+  bar.classList.remove('hidden');
+  document.getElementById('player-title').textContent = name;
+  const p = document.getElementById('player');
+  p.src = '/api/stream?path=' + encodeURIComponent(rel);
+  p.play();
+}
+
+// ---------- Toast ----------
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ---------- Init ----------
+(async () => {
+  const r = await fetch('/api/check-auth', {credentials:'same-origin'});
+  const d = await r.json();
+  if (d.authed) { showMain(); loadDir(''); }
+})();
+</script>
+</body>
+</html>
