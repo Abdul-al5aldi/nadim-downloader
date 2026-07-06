@@ -136,6 +136,8 @@ def quick_tags():
         tags = audio.tags or ID3()
         return jsonify({
             'title': get_text(tags, 'TIT2'),
+            'album': get_text(tags, 'TALB'),
+            'genre': get_text(tags, 'TCON'),
             'artist': get_text(tags, 'TPE1'),
         })
     except Exception:
