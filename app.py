@@ -118,6 +118,32 @@ def get_text(tags, frame):
     return str(f.text[0]) if f and f.text else ''
 
 
+@app.route('/api/quick-tags')
+@login_required
+def quick_tags():
+    """Lightweight tag read for the file-list preview (title + artist only)."""
+    rel = request.args.get('path', '')
+    full = safe_path(rel)
+    sftp, transport = sftp_connect()
+    try:
+        local = download_to_temp(sftp, full)
+    finally:
+        sftp.close()
+        transport.close()
+
+    try:
+        audio = MP3(local, ID3=ID3)
+        tags = audio.tags or ID3()
+        return jsonify({
+            'title': get_text(tags, 'TIT2'),
+            'artist': get_text(tags, 'TPE1'),
+        })
+    except Exception:
+        return jsonify({'title': '', 'artist': ''})
+    finally:
+        os.unlink(local)
+
+
 @app.route('/api/tags')
 @login_required
 def read_tags():
