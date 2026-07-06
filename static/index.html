@@ -81,7 +81,13 @@
   }
   .file-row:active { background: var(--panel); }
   .file-icon { font-size: 22px; width: 30px; text-align: center; flex-shrink: 0; }
-  .file-name { flex: 1; font-size: 15px; word-break: break-all; }
+  .file-text { flex: 1; min-width: 0; }
+  .file-name { font-size: 15px; word-break: break-all; }
+  .file-preview {
+    font-size: 12px; color: var(--muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .file-preview.loading { opacity: .5; }
   .file-size { color: var(--muted); font-size: 12px; flex-shrink: 0; }
   .file-menu-btn {
     background: none; border: none; color: var(--muted); font-size: 20px;
@@ -356,23 +362,62 @@ function renderList() {
     list.innerHTML = '<p style="text-align:center;color:var(--muted);padding:30px;">Empty</p>';
     return;
   }
+  const toPreview = [];
   for (const e of filtered) {
     const row = document.createElement('div');
     row.className = 'file-row';
     const icon = e.is_dir ? '📁' : (e.is_audio ? '🎵' : (e.is_lyric ? '📝' : '📄'));
+    const rel = currentPath ? currentPath + '/' + e.name : e.name;
+    const previewId = 'preview-' + btoa(unescape(encodeURIComponent(rel))).replace(/[^a-zA-Z0-9]/g,'');
     row.innerHTML = `
       <div class="file-icon">${icon}</div>
-      <div class="file-name" dir="auto">${e.name}</div>
+      <div class="file-text">
+        <div class="file-name" dir="auto">${e.name}</div>
+        ${e.is_audio ? `<div class="file-preview loading" id="${previewId}">loading…</div>` : ''}
+      </div>
       <div class="file-size">${e.is_dir ? '' : fmtSize(e.size)}</div>
       <button class="file-menu-btn" onclick="event.stopPropagation();openMenu('${e.name.replace(/'/g,"\\'")}', ${e.is_dir})">⋮</button>
     `;
     row.onclick = () => {
-      const rel = currentPath ? currentPath + '/' + e.name : e.name;
       if (e.is_dir) loadDir(rel);
       else if (e.is_audio) openEditor(rel, e.name);
     };
     list.appendChild(row);
+    if (e.is_audio) toPreview.push({rel, previewId});
   }
+  loadPreviews(toPreview);
+}
+
+// Lazy-load title/artist previews with limited concurrency so we don't
+// open too many SFTP connections at once.
+async function loadPreviews(items) {
+  const CONCURRENCY = 3;
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const item = items[idx++];
+      const el = document.getElementById(item.previewId);
+      if (!el) continue; // user navigated away
+      try {
+        const r = await api('/quick-tags?path=' + encodeURIComponent(item.rel));
+        const t = await r.json();
+        const el2 = document.getElementById(item.previewId);
+        if (!el2) continue;
+        el2.classList.remove('loading');
+        if (t.title || t.artist) {
+          el2.textContent = [t.title, t.artist].filter(Boolean).join(' — ');
+        } else {
+          el2.textContent = 'no tags';
+        }
+      } catch (e) {
+        const el3 = document.getElementById(item.previewId);
+        if (el3) { el3.classList.remove('loading'); el3.textContent = ''; }
+      }
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
+  await Promise.all(workers);
 }
 
 // ---------- Context menu ----------
