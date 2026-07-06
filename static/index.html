@@ -405,7 +405,8 @@ async function loadPreviews(items) {
         if (!el2) continue;
         el2.classList.remove('loading');
         if (t.title || t.artist) {
-          el2.textContent = [t.title, t.artist].filter(Boolean).join(' — ');
+          //el2.textContent = [t.title, t.artist].filter(Boolean).join(' — ');
+          el2.textContent = [t.title, t.album && `${t.album}${t.genre ? ` (${t.genre})` : ''}`, t.artist].filter(Boolean).join(' — ');
         } else {
           el2.textContent = 'no tags';
         }
