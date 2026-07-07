@@ -404,9 +404,14 @@ async function loadPreviews(items) {
       if (!el) continue;
       const t = data.results[item.rel] || {};
       el.classList.remove('loading');
-      el.textContent = (t.title || t.artist)
-        ? [t.title, t.artist].filter(Boolean).join(' — ')
-        : 'no tags';
+      // el.textContent = (t.title || t.artist)
+      //   ? [t.title, t.artist].filter(Boolean).join(' — ')
+      //   : 'no tags';
+      el.textContent = (
+        [t.title, t.album && `${t.album}${t.genre ? ` (${t.genre})` : ''}`, t.artist]
+        .filter(Boolean)
+        .join(' — ')
+        ) || 'no tags';
     }
   } catch (e) {
     for (const item of items) {
