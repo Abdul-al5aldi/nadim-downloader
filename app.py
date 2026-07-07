@@ -4,6 +4,7 @@ import stat
 import posixpath
 import tempfile
 import functools
+import concurrent.futures
 from flask import Flask, request, jsonify, send_file, session, send_from_directory
 import paramiko
 from mutagen.mp3 import MP3
@@ -134,8 +135,6 @@ def quick_read_tags(sftp, full):
         tags = ID3(io.BytesIO(data))
         return {
             'title': get_text(tags, 'TIT2'),
-            'album': get_text(tags, 'TALB'),
-            'genre': get_text(tags, 'TCON'),
             'artist': get_text(tags, 'TPE1'),
         }
 
@@ -153,23 +152,31 @@ def quick_read_tags(sftp, full):
 @app.route('/api/quick-tags-batch', methods=['POST'])
 @login_required
 def quick_tags_batch():
-    """Read title/artist for many files using a single SFTP connection,
-    fetching only a small leading chunk of each file (not the whole song)."""
+    """Read title/artist for many files in parallel, using several SFTP
+    connections at once so network round-trip latency overlaps instead of
+    stacking up file-by-file."""
     data = request.json or {}
     rels = data.get('paths', [])[:200]  # sane cap
     results = {}
-    sftp, transport = sftp_connect()
-    try:
-        for rel in rels:
-            try:
-                full = safe_path(rel)
-                results[rel] = quick_read_tags(sftp, full)
-            except Exception:
-                results[rel] = {'title': '', 'artist': ''}
-        return jsonify({'results': results})
-    finally:
-        sftp.close()
-        transport.close()
+
+    WORKERS = 6
+
+    def fetch_one(rel):
+        sftp, transport = sftp_connect()
+        try:
+            full = safe_path(rel)
+            return rel, quick_read_tags(sftp, full)
+        except Exception:
+            return rel, {'title': '', 'artist': ''}
+        finally:
+            sftp.close()
+            transport.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for rel, tags in pool.map(fetch_one, rels):
+            results[rel] = tags
+
+    return jsonify({'results': results})
 
 
 @app.route('/api/quick-tags')
