@@ -388,37 +388,32 @@ function renderList() {
   loadPreviews(toPreview);
 }
 
-// Lazy-load title/artist previews with limited concurrency so we don't
-// open too many SFTP connections at once.
+// Load title/artist previews for all audio files in the current folder
+// with a single batched request (one SFTP connection server-side).
 async function loadPreviews(items) {
-  const CONCURRENCY = 3;
-  let idx = 0;
-  async function worker() {
-    while (idx < items.length) {
-      const item = items[idx++];
+  if (!items.length) return;
+  try {
+    const r = await api('/quick-tags-batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({paths: items.map(i => i.rel)})
+    });
+    const data = await r.json();
+    for (const item of items) {
       const el = document.getElementById(item.previewId);
-      if (!el) continue; // user navigated away
-      try {
-        const r = await api('/quick-tags?path=' + encodeURIComponent(item.rel));
-        const t = await r.json();
-        const el2 = document.getElementById(item.previewId);
-        if (!el2) continue;
-        el2.classList.remove('loading');
-        if (t.title || t.artist) {
-          //el2.textContent = [t.title, t.artist].filter(Boolean).join(' — ');
-          el2.textContent = [t.title, t.album && `${t.album}${t.genre ? ` (${t.genre})` : ''}`, t.artist].filter(Boolean).join(' — ');
-        } else {
-          el2.textContent = 'no tags';
-        }
-      } catch (e) {
-        const el3 = document.getElementById(item.previewId);
-        if (el3) { el3.classList.remove('loading'); el3.textContent = ''; }
-      }
+      if (!el) continue;
+      const t = data.results[item.rel] || {};
+      el.classList.remove('loading');
+      el.textContent = (t.title || t.artist)
+        ? [t.title, t.artist].filter(Boolean).join(' — ')
+        : 'no tags';
+    }
+  } catch (e) {
+    for (const item of items) {
+      const el = document.getElementById(item.previewId);
+      if (el) { el.classList.remove('loading'); el.textContent = ''; }
     }
   }
-  const workers = [];
-  for (let i = 0; i < CONCURRENCY; i++) workers.push(worker());
-  await Promise.all(workers);
 }
 
 // ---------- Context menu ----------
