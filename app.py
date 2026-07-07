@@ -135,18 +135,20 @@ def quick_read_tags(sftp, full):
         tags = ID3(io.BytesIO(data))
         return {
             'title': get_text(tags, 'TIT2'),
+            'album': get_text(tags, 'TALB'),
+            'genre': get_text(tags, 'TCON'),
             'artist': get_text(tags, 'TPE1'),
         }
 
     try:
         return try_chunk(CHUNK_SIZE)
     except ID3NoHeaderError:
-        return {'title': '', 'artist': ''}
+        return {'title': '', 'album': '', 'genre': '', 'artist': ''}
     except Exception:
         try:
             return try_chunk(CHUNK_SIZE * 4)
         except Exception:
-            return {'title': '', 'artist': ''}
+            return {'title': '', 'album': '', 'genre': '', 'artist': ''}
 
 
 @app.route('/api/quick-tags-batch', methods=['POST'])
@@ -167,7 +169,7 @@ def quick_tags_batch():
             full = safe_path(rel)
             return rel, quick_read_tags(sftp, full)
         except Exception:
-            return rel, {'title': '', 'artist': ''}
+            return rel, {'title': '', 'album': '', 'genre': '', 'artist': ''}
         finally:
             sftp.close()
             transport.close()
