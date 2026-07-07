@@ -118,10 +118,43 @@ def get_text(tags, frame):
     return str(f.text[0]) if f and f.text else ''
 
 
+import io
+from mutagen.id3 import ID3NoHeaderError
+
+CHUNK_SIZE = 400 * 1024  # usually enough for ID3 header + embedded cover art
+
+
+def quick_read_tags(sftp, full):
+    """Read only a small leading chunk of the remote file (not the whole
+    song) to extract title/artist. Falls back to a bigger chunk once if the
+    embedded cover art pushes the tag past our first guess."""
+    def try_chunk(size):
+        with sftp.open(full, 'rb') as f:
+            data = f.read(size)
+        tags = ID3(io.BytesIO(data))
+        return {
+            'title': get_text(tags, 'TIT2'),
+            'album': get_text(tags, 'TALB'),
+            'genre': get_text(tags, 'TCON'),
+            'artist': get_text(tags, 'TPE1'),
+        )
+
+    try:
+        return try_chunk(CHUNK_SIZE)
+    except ID3NoHeaderError:
+        return {'title': '', 'artist': ''}
+    except Exception:
+        try:
+            return try_chunk(CHUNK_SIZE * 4)
+        except Exception:
+            return {'title': '', 'artist': ''}
+
+
 @app.route('/api/quick-tags-batch', methods=['POST'])
 @login_required
 def quick_tags_batch():
-    """Read title/artist for many files using a single SFTP connection."""
+    """Read title/artist for many files using a single SFTP connection,
+    fetching only a small leading chunk of each file (not the whole song)."""
     data = request.json or {}
     rels = data.get('paths', [])[:200]  # sane cap
     results = {}
@@ -130,18 +163,7 @@ def quick_tags_batch():
         for rel in rels:
             try:
                 full = safe_path(rel)
-                tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-                tmp.close()
-                sftp.get(full, tmp.name)
-                try:
-                    audio = MP3(tmp.name, ID3=ID3)
-                    tags = audio.tags or ID3()
-                    results[rel] = {
-                        'title': get_text(tags, 'TIT2'),
-                        'artist': get_text(tags, 'TPE1'),
-                    }
-                finally:
-                    os.unlink(tmp.name)
+                results[rel] = quick_read_tags(sftp, full)
             except Exception:
                 results[rel] = {'title': '', 'artist': ''}
         return jsonify({'results': results})
@@ -153,27 +175,15 @@ def quick_tags_batch():
 @app.route('/api/quick-tags')
 @login_required
 def quick_tags():
-    """Lightweight tag read for the file-list preview (title + artist only)."""
+    """Lightweight tag read for a single file (title + artist only)."""
     rel = request.args.get('path', '')
     full = safe_path(rel)
     sftp, transport = sftp_connect()
     try:
-        local = download_to_temp(sftp, full)
+        return jsonify(quick_read_tags(sftp, full))
     finally:
         sftp.close()
         transport.close()
-
-    try:
-        audio = MP3(local, ID3=ID3)
-        tags = audio.tags or ID3()
-        return jsonify({
-            'title': get_text(tags, 'TIT2'),
-            'artist': get_text(tags, 'TPE1'),
-        })
-    except Exception:
-        return jsonify({'title': '', 'artist': ''})
-    finally:
-        os.unlink(local)
 
 
 @app.route('/api/tags')
