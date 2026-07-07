@@ -137,7 +137,7 @@ def quick_read_tags(sftp, full):
             'album': get_text(tags, 'TALB'),
             'genre': get_text(tags, 'TCON'),
             'artist': get_text(tags, 'TPE1'),
-        )
+        }
 
     try:
         return try_chunk(CHUNK_SIZE)
