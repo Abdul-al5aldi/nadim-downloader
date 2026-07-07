@@ -118,6 +118,38 @@ def get_text(tags, frame):
     return str(f.text[0]) if f and f.text else ''
 
 
+@app.route('/api/quick-tags-batch', methods=['POST'])
+@login_required
+def quick_tags_batch():
+    """Read title/artist for many files using a single SFTP connection."""
+    data = request.json or {}
+    rels = data.get('paths', [])[:200]  # sane cap
+    results = {}
+    sftp, transport = sftp_connect()
+    try:
+        for rel in rels:
+            try:
+                full = safe_path(rel)
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+                tmp.close()
+                sftp.get(full, tmp.name)
+                try:
+                    audio = MP3(tmp.name, ID3=ID3)
+                    tags = audio.tags or ID3()
+                    results[rel] = {
+                        'title': get_text(tags, 'TIT2'),
+                        'artist': get_text(tags, 'TPE1'),
+                    }
+                finally:
+                    os.unlink(tmp.name)
+            except Exception:
+                results[rel] = {'title': '', 'artist': ''}
+        return jsonify({'results': results})
+    finally:
+        sftp.close()
+        transport.close()
+
+
 @app.route('/api/quick-tags')
 @login_required
 def quick_tags():
@@ -136,8 +168,6 @@ def quick_tags():
         tags = audio.tags or ID3()
         return jsonify({
             'title': get_text(tags, 'TIT2'),
-            'album': get_text(tags, 'TALB'),
-            'genre': get_text(tags, 'TCON'),
             'artist': get_text(tags, 'TPE1'),
         })
     except Exception:
